@@ -5,8 +5,18 @@ using OpenTK.Mathematics;
 
 namespace WindowEngine
 {
+
     public class Game
+
     {
+        private long frameCount = 0;
+
+        private static int CreateColor(int r, int g, int b)
+        {
+            // Pack as AARRGGBB (A=255). With PixelFormat.Bgra upload this maps correctly in memory.
+            return (255 << 24) | (r << 16) | (g << 8) | b;
+        }
+
         // 2D pixel surface
         private Surface screen;
 
@@ -106,10 +116,16 @@ void main(){
 
         public void Tick()
         {
+            frameCount++;
+
+            // Calculate time-based blue tint using sine wave (0-255 range)
+            double bluePhase = Math.Sin(frameCount * 0.02) * 0.5 + 0.5; // Normalized to 0-1
+            int blueBase = (int)(bluePhase * 255);
+
             // 1) Fill background dark blue
             Array.Fill(screen.pixels, unchecked((int)0xFF202060));
 
-            // 2) Draw centered 300×300 solid blue square
+            // 2) Draw centered 300×300 gradient square
             int square = 300;
             int startX = (screen.width - square) / 2;
             int startY = (screen.height - square) / 2;
@@ -119,19 +135,25 @@ void main(){
                 int sy = startY + y;
                 if (sy < 0 || sy >= screen.height) continue;
 
+                // Map y-position to green intensity (0-255)
+                int green = (int)((y / (float)square) * 255);
+
                 for (int x = 0; x < square; x++)
                 {
                     int sx = startX + x;
                     if (sx < 0 || sx >= screen.width) continue;
 
-                    // Solid blue (ARGB: A=255, R=0, G=0, B=255)
-                    int color = (255 << 24) | (255);
+                    // Map x-position to red intensity (0-255)
+                    int red = (int)((x / (float)square) * 255);
+
+                    // Combine with time-based blue tint
+                    int color = CreateColor(red, green, blueBase);
                     int location = sx + sy * screen.width;
                     screen.pixels[location] = color;
                 }
             }
 
-            // 3) Upload pixels to texture and draw quad (same as before)
+            // 3) Upload pixels to texture and draw quad
             GL.Clear(ClearBufferMask.ColorBufferBit);
             GL.PixelStore(PixelStoreParameter.UnpackAlignment, 4);
             GL.BindTexture(TextureTarget.Texture2D, _tex);
