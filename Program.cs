@@ -11,50 +11,55 @@ namespace WindowEngine
     {
         static void Main(string[] args)
         {
-            // Define window settings
             var nativeWindowSettings = new NativeWindowSettings()
             {
-                Size = new Vector2i(800, 600), // Modern resolution
+                Size = new Vector2i(800, 600),
                 Title = "OpenTK Graphics Tutorial",
-                WindowBorder = WindowBorder.Fixed,
-                Profile = ContextProfile.Core, // Use modern OpenGL
-                APIVersion = new Version(3, 3) // OpenGL 3.3 for compatibility
+                WindowBorder = WindowBorder.Resizable,   // <-- make the window resizable
+                Profile = ContextProfile.Core,
+                APIVersion = new Version(3, 3)
             };
 
-            // Create window and game instance
             using (var window = new GameWindow(GameWindowSettings.Default, nativeWindowSettings))
             {
-                var game = new Game(800, 600);
+                // Create the game with the initial client size
+                var game = new Game(window.ClientSize.X, window.ClientSize.Y);
 
-                // Initialize OpenGL on load
                 window.Load += () =>
                 {
                     game.Init();
+
+                    // Ensure GL viewport & buffers match actual drawable size on load
+                    game.Resize(window.ClientSize.X, window.ClientSize.Y);
                 };
 
-                // Update and render each frame
+                // Render loop
                 window.RenderFrame += (FrameEventArgs e) =>
                 {
                     game.Tick();
-                    window.SwapBuffers(); // Double buffering for smooth rendering
+                    window.SwapBuffers();
                 };
 
-                // Handle window resizing (basic setup)
+                // Handle logical window resizing (most cases)
                 window.Resize += (ResizeEventArgs e) =>
                 {
-                    GL.Viewport(0, 0, e.Width, e.Height);
+                    game.Resize(e.Width, e.Height);
                 };
 
-                // Close on ESC key
+                // Handle framebuffer resize (HiDPI / scaling changes)
+                window.FramebufferResize += (FramebufferResizeEventArgs e) =>
+                {
+                    // Prefer framebuffer size if available
+                    game.Resize(e.Width, e.Height);
+                };
+
+                // Close on ESC
                 window.UpdateFrame += (FrameEventArgs e) =>
                 {
                     if (window.KeyboardState.IsKeyDown(Keys.Escape))
-                    {
                         window.Close();
-                    }
                 };
 
-                // Run at 60 FPS
                 window.Run();
             }
         }
