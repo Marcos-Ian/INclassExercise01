@@ -1,62 +1,142 @@
 ﻿using OpenTK.Graphics.OpenGL4;
+
 using OpenTK.Mathematics;
+
 using OpenTK.Windowing.Common;
+
 using OpenTK.Windowing.Desktop;
+
 using OpenTK.Windowing.GraphicsLibraryFramework;
 
+
+
 namespace WindowEngine
+
 {
-    // Main entry point and OpenGL window setup
+
     class Program
+
     {
+
         static void Main(string[] args)
+
         {
-            // Define window settings
-            var nativeWindowSettings = new NativeWindowSettings()
+
+            var nativeWindowSettings = new NativeWindowSettings
+
             {
-                Size = new Vector2i(800, 600), // Modern resolution
-                Title = "OpenTK Graphics Tutorial",
-                WindowBorder = WindowBorder.Fixed,
-                Profile = ContextProfile.Core, // Use modern OpenGL
-                APIVersion = new Version(3, 3) // OpenGL 3.3 for compatibility
+
+                ClientSize = new Vector2i(800, 600),     // use ClientSize (Size is obsolete)
+
+                Title = "OpenGL Terrain (OpenTK)",
+
+                WindowBorder = WindowBorder.Resizable,
+
+                Profile = ContextProfile.Core,
+
+                APIVersion = new Version(3, 3)
+
             };
 
-            // Create window and game instance
-            using (var window = new GameWindow(GameWindowSettings.Default, nativeWindowSettings))
+
+
+            using var window = new GameWindow(GameWindowSettings.Default, nativeWindowSettings);
+
+
+
+            var game = new Game(window.ClientSize.X, window.ClientSize.Y);
+
+
+
+            window.Load += () =>
+
             {
-                var game = new Game(800, 600);
 
-                // Initialize OpenGL on load
-                window.Load += () =>
-                {
-                    game.Init();
-                };
+                game.Init();
 
-                // Update and render each frame
-                window.RenderFrame += (FrameEventArgs e) =>
-                {
-                    game.Tick();
-                    window.SwapBuffers(); // Double buffering for smooth rendering
-                };
+                game.Resize(window.ClientSize.X, window.ClientSize.Y);
 
-                // Handle window resizing (basic setup)
-                window.Resize += (ResizeEventArgs e) =>
-                {
-                    GL.Viewport(0, 0, e.Width, e.Height);
-                };
+            };
 
-                // Close on ESC key
-                window.UpdateFrame += (FrameEventArgs e) =>
-                {
-                    if (window.KeyboardState.IsKeyDown(Keys.Escape))
-                    {
-                        window.Close();
-                    }
-                };
 
-                // Run at 60 FPS
-                window.Run();
-            }
+
+            // keyboard pan/zoom each UpdateFrame
+
+            window.UpdateFrame += (FrameEventArgs e) =>
+
+            {
+
+                var kb = window.KeyboardState;
+
+                float dt = (float)e.Time;
+
+
+
+                if (kb.IsKeyDown(Keys.Escape))
+
+                    window.Close();
+
+
+
+                // Pan (arrows) – world units per second
+
+                float panSpeed = 1.5f * dt;
+
+                if (kb.IsKeyDown(Keys.Left)) game.Pan(-panSpeed, 0f);
+
+                if (kb.IsKeyDown(Keys.Right)) game.Pan(+panSpeed, 0f);
+
+                if (kb.IsKeyDown(Keys.Up)) game.Pan(0f, +panSpeed);
+
+                if (kb.IsKeyDown(Keys.Down)) game.Pan(0f, -panSpeed);
+
+
+
+                // Zoom (Z in, X out) – exponential so it feels smooth
+
+                float zoomRate = 1.8f;
+
+                float step = MathF.Pow(zoomRate, dt);
+
+                if (kb.IsKeyDown(Keys.Z)) game.ZoomBy(step);
+
+                if (kb.IsKeyDown(Keys.X)) game.ZoomBy(1f / step);
+
+
+
+                if (kb.IsKeyPressed(Keys.R)) game.ResetCamera();
+
+            };
+
+
+
+            // draw
+
+            window.RenderFrame += (FrameEventArgs e) =>
+
+            {
+
+                game.RenderGL(e.Time);
+
+                window.SwapBuffers();
+
+            };
+
+
+
+            // handle resizing (window + HiDPI)
+
+            window.Resize += (ResizeEventArgs e) => game.Resize(e.Width, e.Height);
+
+            window.FramebufferResize += (FramebufferResizeEventArgs e) => game.Resize(e.Width, e.Height);
+
+
+
+            window.Run();
+
         }
+
     }
+
 }
+
