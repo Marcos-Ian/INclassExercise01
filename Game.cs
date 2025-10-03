@@ -10,6 +10,7 @@ namespace WindowEngine
 
     {
         private long frameCount = 0;
+        private float angle = 0f;
 
         private static int CreateColor(int r, int g, int b)
         {
@@ -114,46 +115,68 @@ void main(){
             GL.BindTexture(TextureTarget.Texture2D, 0);
         }
 
+        // Transform world X coordinate (-2 to 2) to screen X coordinate (0 to width)
+        // Maps world space to pixel space with centering
+        private int TX(float x)
+        {
+            return (int)((x + 2f) / 4f * screen.width);
+        }
+
+        // Transform world Y coordinate (-2 to 2) to screen Y coordinate (0 to height)
+        // Y-INVERSION: Traditional screen coordinates have Y=0 at TOP, increasing downward.
+        // OpenGL/math conventions have Y=0 at BOTTOM, increasing upward.
+        // We negate y to flip: positive world Y goes UP on screen (toward pixel row 0).
+        // This creates the intuitive Cartesian coordinate system users expect.
+        private int TY(float y)
+        {
+            return (int)((-y + 2f) / 4f * screen.height);
+        }
+
         public void Tick()
         {
             frameCount++;
+            angle += 0.0005f; // Rotate 0.05 radians per frame
 
-            // Calculate time-based blue tint using sine wave (0-255 range)
-            double bluePhase = Math.Sin(frameCount * 0.02) * 0.5 + 0.5; // Normalized to 0-1
-            int blueBase = (int)(bluePhase * 255);
-
-            // 1) Fill background dark blue
+            // Fill background dark blue
             Array.Fill(screen.pixels, unchecked((int)0xFF202060));
 
-            // 2) Draw centered 300×300 gradient square
-            int square = 300;
-            int startX = (screen.width - square) / 2;
-            int startY = (screen.height - square) / 2;
+            // Pulse size with sine wave: oscillates between 0.7 and 1.3
+            float sizeScale = 1.0f + 0.3f * (float)Math.Sin(angle);
 
-            for (int y = 0; y < square; y++)
+            // Define square corners in world space (before rotation and scaling)
+            float size = 1.0f * sizeScale; // Base size in world coords, scaled by pulse
+            float[] cornerX = { -size, size, size, -size };
+            float[] cornerY = { -size, -size, size, size };
+
+            // Rotate each corner using rotation matrix
+            // [ cos(a)  -sin(a) ]   [x]   [x*cos(a) - y*sin(a)]
+            // [ sin(a)   cos(a) ] * [y] = [x*sin(a) + y*cos(a)]
+            float cosA = (float)Math.Cos(angle);
+            float sinA = (float)Math.Sin(angle);
+
+            int[] screenX = new int[4];
+            int[] screenY = new int[4];
+
+            for (int i = 0; i < 4; i++)
             {
-                int sy = startY + y;
-                if (sy < 0 || sy >= screen.height) continue;
+                // Apply rotation transformation
+                float rx = cornerX[i] * cosA - cornerY[i] * sinA;
+                float ry = cornerX[i] * sinA + cornerY[i] * cosA;
 
-                // Map y-position to green intensity (0-255)
-                int green = (int)((y / (float)square) * 255);
-
-                for (int x = 0; x < square; x++)
-                {
-                    int sx = startX + x;
-                    if (sx < 0 || sx >= screen.width) continue;
-
-                    // Map x-position to red intensity (0-255)
-                    int red = (int)((x / (float)square) * 255);
-
-                    // Combine with time-based blue tint
-                    int color = CreateColor(red, green, blueBase);
-                    int location = sx + sy * screen.width;
-                    screen.pixels[location] = color;
-                }
+                // Convert rotated world coordinates to screen coordinates
+                screenX[i] = TX(rx);
+                screenY[i] = TY(ry);
             }
 
-            // 3) Upload pixels to texture and draw quad
+            // Draw the square by connecting corners with lines
+            int white = unchecked((int)0xFFFFFFFF);
+            for (int i = 0; i < 4; i++)
+            {
+                int next = (i + 1) % 4; // Wrap around to close the square
+                screen.Line(screenX[i], screenY[i], screenX[next], screenY[next], white);
+            }
+
+            // Upload pixels to texture and draw quad
             GL.Clear(ClearBufferMask.ColorBufferBit);
             GL.PixelStore(PixelStoreParameter.UnpackAlignment, 4);
             GL.BindTexture(TextureTarget.Texture2D, _tex);
@@ -193,6 +216,41 @@ void main(){
                 this.width = width;
                 this.height = height;
                 pixels = new int[width * height];
+            }
+
+            // Bresenham's line algorithm for efficient line drawing
+            public void Line(int x0, int y0, int x1, int y1, int color)
+            {
+                int dx = Math.Abs(x1 - x0);
+                int dy = Math.Abs(y1 - y0);
+                int sx = x0 < x1 ? 1 : -1;
+                int sy = y0 < y1 ? 1 : -1;
+                int err = dx - dy;
+
+                while (true)
+                {
+                    // Plot pixel if within bounds
+                    if (x0 >= 0 && x0 < width && y0 >= 0 && y0 < height)
+                    {
+                        pixels[x0 + y0 * width] = color;
+                    }
+
+                    // Check if we've reached the end
+                    if (x0 == x1 && y0 == y1) break;
+
+                    // Calculate error and step
+                    int e2 = 2 * err;
+                    if (e2 > -dy)
+                    {
+                        err -= dy;
+                        x0 += sx;
+                    }
+                    if (e2 < dx)
+                    {
+                        err += dx;
+                        y0 += sy;
+                    }
+                }
             }
         }
     }
